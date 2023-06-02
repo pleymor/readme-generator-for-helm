@@ -1,33 +1,40 @@
-name: '[CI/CD] Publish Package to npmjs'
+name: CD
+
 on:
-  release:
-    types:
-      - created
-permissions:
-  contents: read
+  push:
+   tags:
+     - '*'
+
 jobs:
-  publish:
-    name: Publish
-    runs-on: ubuntu-latest
+  release:
+    runs-on: macos-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # Setup .npmrc file to publish to npm
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16.x'
-          registry-url: 'https://registry.npmjs.org'
-          scope: '@bitnami'
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: npm-
-      - name: Clean install
-        run: npm ci
-      - name: Publish
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    - uses: actions/checkout@v2
+    - name: Get version
+      id: get_version
+      run: echo ::set-output name=version::${GITHUB_REF/refs\/tags\//}
+    - name: Use Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: "20.x"
+    - name: Install dependencies
+      run: npm install
+    - name: Install pkg globally
+      run: npm install -g pkg
+    - name: Create binary
+      run: pkg . -o readme-generator-for-helm
+    - name: Set SHA
+      id: shasum
+      run: |
+        echo ::set-output name=sha::"$(shasum -a 256 ./readme-generator-for-helm | awk '{printf $1}')"
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #- name: Bump homebrew-core formula
+    #  uses: mislav/bump-homebrew-formula-action@v1
+    #  if: "!contains(github.ref, '-')"
+    #  env:
+    #    COMMITTER_TOKEN: ${{ secrets.BREW_TOKEN }}
+    #  with:
+    #    formula-name: readme-generator-for-helm
